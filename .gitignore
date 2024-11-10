@@ -1,0 +1,4 @@
+*.out
+*.exe
+aliases.sh
+lex.yy.c

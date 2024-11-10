@@ -1,0 +1,5 @@
+~~comentario de linea 4324 #
+cosaValida = 50
+~/ Comentario 
+de bloque 5453~ x\ # \~
+cosaValida = 50

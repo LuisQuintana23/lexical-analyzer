@@ -1,0 +1,9 @@
+27 090 18u 64l 85ul -12ul
+43.0 83.7e-5 96.0ec2 0.71
++ - * / % ++ -- **
+{ } [ ] ( ) .
+#cadena de Texto#
+CASE BREAK CHAR CONTINUE DO DOUBLE ELSE FLOAT FOR IF INT LONG RETURN SHORT SIZEOF SWITCH UNSIGNED VOID WHILE
+= += -= *= /= %= &= ^= |= <<= >>=
+|| ! && !
+iVarible_var1 Varible_var2

@@ -45,11 +45,6 @@ typedef struct {
     size_t capacity;
 } TablaSimbolos;
 
-void agregarSimbolo(TablaSimbolos *tabla, int posicion, const char *nombre, const char *tipo, int valor);
-TablaSimbolos* crearTablaSimbolos(size_t capacidadInicial);
-void mostrarTablaSimbolos(const TablaSimbolos *tabla);
-char* eliminarHashExtremos(const char* cadena);
-void strip(char *cadena);
 
 const char* catalogo_palabras_reservadas[] = {
     "BREAK",
@@ -104,40 +99,45 @@ const char* catalogo_op_asignacion[] = {
     ">>="
 };
 
+FILE *yyin;
+Tabla *tabla_cadenas;
+Tabla *tabla_flotantes;
+TablaSimbolos *tabla_simbolos;
+TablaToken *tabla_tokens;
+
 size_t sizeCatalogoPalabrasReservadas = 19;
 size_t sizeCatalogoOpAritmeticos = 8;
 size_t sizeCatalogoOpLogicos = 3;
 size_t sizeCatalogoOpAsignacion = 11;
 
-// prototipos
-void showError(char* e);
-int yywrap();
-
-void push(int clase, char *text);
-
-Tabla* crearTabla(size_t capacidadInicial);
-void agregarItem(Tabla *tabla, int clave, const char *valor);
-void mostrarTablaCadenas(const Tabla *tabla);
-void mostrarTablaFlotantes(const Tabla *tabla);
-
-TablaToken* crearTablaTokens(size_t capacidadInicial);
-void agregarToken(TablaToken *tabla, int clave, int valor);
-void mostrarTablaTokens(const TablaToken *tabla);
-
-int limpiarEntero(const char* entero);
-
-FILE *yyin;
-TablaToken *tabla_tokens;
-Tabla *tabla_cadenas;
-Tabla *tabla_flotantes;
-TablaSimbolos *tabla_simbolos;
-
 int indice_cadenas = 0;
 int indice_flotantes = 0;
 int indice_simbolos = 0;
 
-%}
+void showError(char* e);
+int yywrap();
+void push(int clase, char *text);
 
+Tabla* crearTabla();
+TablaSimbolos* crearTablaSimbolos();
+TablaToken* crearTablaTokens();
+
+void agregarItem(Tabla *tabla, int clave, const char *valor);
+void agregarSimbolo(TablaSimbolos *tabla, int posicion, const char *nombre, const char *tipo, int valor);
+void agregarToken(TablaToken *tabla, int clave, int valor);
+
+void mostrarTablaCadenas(const Tabla *tabla);
+void mostrarTablaFlotantes(const Tabla *tabla);
+void mostrarTablaSimbolos(const TablaSimbolos *tabla);
+void mostrarTablaTokens(const TablaToken *tabla);
+
+int obtenerPosicionCatalogo(const char** catalogo, char *text, int size);
+
+int limpiarEntero(const char* entero);
+char* eliminarHashExtremos(const char* cadena);
+void strip(char *cadena);
+
+%}
 %option yylineno
 
 ENTERO_NEGATIVO -[0-9]+l?
@@ -206,17 +206,17 @@ COMENTARIO_LINEA "~~".*
 COMENTARIO_BLOQUE "~/"(.|\n)*"\~"
 
 %%
-{ENTERO}    {push(0, yytext);}
-{FLOTANTE}    {push(1, yytext);}
-{OP_ARITMETICO}    {push(2, yytext);}
-{SIMBOLO_ESPECIAL}    {push(3, yytext);}
-{CADENA}    {push(4, yytext);}
-{PALABRA_RESERVADA}    {push(5, yytext);}
-{OPERADOR_ASIGNACION}    {push(6, yytext);}
-{OPERADOR_LOGICO}    {push(7, yytext);}
-{IDENTIFICADOR}    {push(8, yytext);}
-{COMENTARIO_LINEA}    {printf("\ncomentario de linea encontrado: %s", yytext);}
-{COMENTARIO_BLOQUE}    {printf("\ncomentario de bloque encontrado: %s", yytext);}
+{ENTERO}                {push(0, yytext);}
+{FLOTANTE}              {push(1, yytext);}
+{OP_ARITMETICO}         {push(2, yytext);}
+{SIMBOLO_ESPECIAL}      {push(3, yytext);}
+{CADENA}                {push(4, yytext);}
+{PALABRA_RESERVADA}     {push(5, yytext);}
+{OPERADOR_ASIGNACION}   {push(6, yytext);}
+{OPERADOR_LOGICO}       {push(7, yytext);}
+{IDENTIFICADOR}         {push(8, yytext);}
+{COMENTARIO_LINEA}      {}
+{COMENTARIO_BLOQUE}     {}
 
 "\n"
 "\t"
@@ -227,29 +227,6 @@ COMENTARIO_BLOQUE "~/"(.|\n)*"\~"
 {NO_IDENTIFICADOR} {printf("\nIdentificador inválido: \n"); showError(yytext);} 
 .           {showError(yytext);} 
 %%
-
-int obtenerPosicionCatalogo(const char** catalogo, char *text, int size){
-    for (int i = 0; i < size; i++) {
-        if (strcmp(text, catalogo[i]) == 0){
-            return i;
-        }
-    }
-
-    return -1;
-}
-
-void strip(char *cadena) {
-    int i = 0, j = 0;
-    while (cadena[i] != '\0') {
-        // Si el carácter no es espacio, salto de línea ni tabulación, lo copio
-        if (cadena[i] != ' ' && cadena[i] != '\n' && cadena[i] != '\t') {
-            cadena[j++] = cadena[i];
-        }
-        i++;
-    }
-    // Terminar la cadena con el carácter nulo
-    cadena[j] = '\0';
-}
 
 void push(int clase, char *text){
     int valor;
@@ -323,29 +300,29 @@ void showError(char* e){
 }
 
 // función para crear la tabla 
-Tabla* crearTabla(size_t capacidadInicial) {
+Tabla* crearTabla() {
     Tabla *tabla = malloc(sizeof(Tabla));
-    tabla->items = malloc(capacidadInicial * sizeof(Item));
+    tabla->items = malloc(2 * sizeof(Item));
     tabla->size = 0;
-    tabla->capacity = capacidadInicial;
+    tabla->capacity = 2;
     return tabla;
 }
 
 // función para crear la tabla tokens
-TablaToken* crearTablaTokens(size_t capacidadInicial) {
+TablaToken* crearTablaTokens() {
     TablaToken *tabla = malloc(sizeof(TablaToken));
-    tabla->items = malloc(capacidadInicial * sizeof(ItemToken));
+    tabla->items = malloc(2 * sizeof(ItemToken));
     tabla->size = 0;
-    tabla->capacity = capacidadInicial;
+    tabla->capacity = 2;
     return tabla;
 }
 
 // función para crear la tabla de simbolos
-TablaSimbolos* crearTablaSimbolos(size_t capacidadInicial) {
+TablaSimbolos* crearTablaSimbolos() {
     TablaSimbolos *tabla = malloc(sizeof(TablaSimbolos));
-    tabla->simbolos = malloc(capacidadInicial * sizeof(Simbolo));
+    tabla->simbolos = malloc(2 * sizeof(Simbolo));
     tabla->size = 0;
-    tabla->capacity = capacidadInicial;
+    tabla->capacity = 2;
     return tabla;
 }
 
@@ -391,11 +368,13 @@ void agregarSimbolo(TablaSimbolos *tabla, int posicion, const char *nombre, cons
     tabla->size++;
 }
 
-
-
 // función para mostrar el contenido de la tabla de tokens
 void mostrarTablaTokens(const TablaToken *tabla) {
-    printf("\n\tTOKENS\n");
+    printf("\nTOKENS\n");
+    if (tabla->size == 0){
+        printf("\n\t(vacia)\n");
+    }
+
     for (size_t i = 0; i < tabla->size; i++) {
         printf("(%d, %d)\n", tabla->items[i].clave, tabla->items[i].valor);
     }
@@ -403,7 +382,11 @@ void mostrarTablaTokens(const TablaToken *tabla) {
 
 // función para mostrar el contenido de la tabla de cadenas
 void mostrarTablaCadenas(const Tabla *tabla) {
-    printf("\ntabla de cadenas:\n");
+    printf("\nTABLA DE CADENAS\n");
+    if (tabla->size == 0){
+        printf("\n\t(vacia)\n");
+    }
+
     for (size_t i = 0; i < tabla->size; i++) {
         printf("posición: %d, dato: %s\n", tabla->items[i].clave, tabla->items[i].valor);
     }
@@ -411,55 +394,39 @@ void mostrarTablaCadenas(const Tabla *tabla) {
 
 // función para mostrar el contenido de la tabla de simbolos
 void mostrarTablaSimbolos(const TablaSimbolos *tabla) {
-    printf("\ntabla de simbolos:\n");
+    printf("\nTABLA DE SIMBOLOS\n");
+    if (tabla->size == 0){
+        printf("\n\t(vacia)\n");
+    }
+
     for (size_t i = 0; i < tabla->size; i++) {
         printf("posicion: %d, nombre: %s, tipo: %s, valor: %d\n", tabla->simbolos[i].posicion, tabla->simbolos[i].nombre, tabla->simbolos[i].tipo, tabla->simbolos[i].valor);
     }
 }
 
-
 // función para mostrar el contenido de la tabla de flotantes
 void mostrarTablaFlotantes(const Tabla *tabla) {
-    printf("\ntabla de constantes flotantes:\n");
+    printf("\nTABLA DE FLOTANTES\n");
+    if (tabla->size == 0){
+        printf("\n\t(vacia)\n");
+    }
+
     for (size_t i = 0; i < tabla->size; i++) {
         printf("posición: %d, dato: %s\n", tabla->items[i].clave, tabla->items[i].valor);
     }
 }
 
-// función que elimina los caracteres '#' al inicio y al final de una cadena
-char* eliminarHashExtremos(const char* cadena) {
-    int inicio = 0;
-    int fin = strlen(cadena) - 1;
 
-    // verificar si el primer carácter es '#'
-    if (cadena[inicio] == '#') {
-        inicio++;
+int obtenerPosicionCatalogo(const char** catalogo, char *text, int size){
+    for (int i = 0; i < size; i++) {
+        if (strcmp(text, catalogo[i]) == 0){
+            return i;
+        }
     }
 
-    // verificar si el último carácter es '#'
-    if (cadena[fin] == '#') {
-        fin--;
-    }
-
-    // calcular la longitud de la nueva cadena sin los '#' de los extremos
-    int longitud = fin - inicio + 1;
-    if (longitud <= 0) {
-        return strdup("");
-    }
-
-    // asignar memoria para la nueva cadena con la longitud calculada más uno para el terminador nulo
-    char* nuevaCadena = (char*)malloc((longitud + 1) * sizeof(char));
-    if (nuevaCadena == NULL) {
-        // retornar NULL si falla la asignación de memoria
-        return NULL;
-    }
-
-    // copiar la subcadena sin los '#' de los extremos a la nueva cadena
-    strncpy(nuevaCadena, cadena + inicio, longitud);
-    nuevaCadena[longitud] = '\0';
-
-    return nuevaCadena;
+    return -1;
 }
+
 
 int limpiarEntero(const char* entero) {
     char* result = (char*)malloc(strlen(entero) + 1);
@@ -497,21 +464,69 @@ int limpiarEntero(const char* entero) {
     return final;
 }
 
+// función que elimina los caracteres '#' al inicio y al final de una cadena
+char* eliminarHashExtremos(const char* cadena) {
+    int inicio = 0;
+    int fin = strlen(cadena) - 1;
+
+    // verificar si el primer carácter es '#'
+    if (cadena[inicio] == '#') {
+        inicio++;
+    }
+
+    // verificar si el último carácter es '#'
+    if (cadena[fin] == '#') {
+        fin--;
+    }
+
+    // calcular la longitud de la nueva cadena sin los '#' de los extremos
+    int longitud = fin - inicio + 1;
+    if (longitud <= 0) {
+        return strdup("");
+    }
+
+    // asignar memoria para la nueva cadena con la longitud calculada más uno para el terminador nulo
+    char* nuevaCadena = (char*)malloc((longitud + 1) * sizeof(char));
+    if (nuevaCadena == NULL) {
+        // retornar NULL si falla la asignación de memoria
+        return NULL;
+    }
+
+    // copiar la subcadena sin los '#' de los extremos a la nueva cadena
+    strncpy(nuevaCadena, cadena + inicio, longitud);
+    nuevaCadena[longitud] = '\0';
+
+    return nuevaCadena;
+}
+
+void strip(char *cadena) {
+    int i = 0, j = 0;
+    while (cadena[i] != '\0') {
+        // Si el carácter no es espacio, salto de línea ni tabulación, lo copio
+        if (cadena[i] != ' ' && cadena[i] != '\n' && cadena[i] != '\t') {
+            cadena[j++] = cadena[i];
+        }
+        i++;
+    }
+    // Terminar la cadena con el carácter nulo
+    cadena[j] = '\0';
+}
+
+
 int main(int argc, char *argv[]){
     // leer archivo de entrada
     yyin = fopen(argv[1], "rt");
 
-    tabla_tokens = crearTablaTokens(2);
-    tabla_cadenas = crearTabla(2);
-    tabla_flotantes = crearTabla(2);
-    tabla_simbolos = crearTablaSimbolos(2);
+    tabla_tokens = crearTablaTokens();
+    tabla_cadenas = crearTabla();
+    tabla_flotantes = crearTabla();
+    tabla_simbolos = crearTablaSimbolos();
 
     if (yyin == NULL){
         printf("\nel archivo no se puede abrir: %s\n", argv[1]);
         return 1;
     }
 
-    printf("\n%s se ha cargado\n", argv[1]);
     yylex();
 
     mostrarTablaCadenas(tabla_cadenas);
@@ -519,7 +534,6 @@ int main(int argc, char *argv[]){
     mostrarTablaSimbolos(tabla_simbolos);
     mostrarTablaTokens(tabla_tokens);
 
-    printf("\ncerrando %s\n", argv[1]);
     fclose(yyin);
     return 0;
 }
